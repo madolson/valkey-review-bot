@@ -80,6 +80,7 @@ export interface ReviewRouteEntry {
   readonly mentionOnly?: true;
   readonly skipDrafts?: true;
   readonly threadReplyReview?: true;
+  readonly majorDecisionLabel?: true;
 }
 
 /**
@@ -104,6 +105,7 @@ export function routeMaps(
       ...(route.mentionOnly ? { mentionOnly: true } : {}),
       ...(route.skipDrafts ? { skipDrafts: true } : {}),
       ...(route.threadReplyReview ? { threadReplyReview: true } : {}),
+      ...(route.majorDecisionLabel ? { majorDecisionLabel: true } : {}),
     };
     curator[route.repo] = { reviewerId: route.reviewer };
   }

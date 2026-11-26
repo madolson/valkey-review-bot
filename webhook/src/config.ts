@@ -51,6 +51,8 @@ export interface ReviewRoute {
    * question); in any other thread the reply is an ordinary summons.
    */
   readonly threadReplyReview: boolean;
+  /** Reviews add the major-decision-pending label to pull requests that need a major decision. */
+  readonly majorDecisionLabel: boolean;
 }
 
 export interface CuratorRoute {
@@ -168,6 +170,7 @@ function parseReviewRoutes(raw: Record<string, unknown>): Map<string, ReviewRout
       mentionOnly: routeFlag(entry, 'mentionOnly', at),
       skipDrafts: routeFlag(entry, 'skipDrafts', at),
       threadReplyReview: routeFlag(entry, 'threadReplyReview', at),
+      majorDecisionLabel: routeFlag(entry, 'majorDecisionLabel', at),
     });
   }
   return routes;

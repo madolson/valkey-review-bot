@@ -6,6 +6,7 @@ import type { StatusComment } from '../status-comment.js';
 import type { TokenSource } from '../github-auth.js';
 import { reviewStateSchema, renderReviewState, stripStateMarker, validateReviewState, type ReviewState, type StateCommentWriter } from '../review-state.js';
 import { runBounded } from './spawn.js';
+import { applyMajorDecisionLabel, majorDecisionLine, majorDecisionSchema, validateMajorDecision, type MajorDecision } from '../major-decision.js';
 
 /**
  * Endpoint shapes gh_api_read may GET, after the "repos/OWNER/REPO/"
@@ -147,15 +148,33 @@ function checkState(deps: GhToolsDeps, state: ReviewState): string | null {
  * terminal tool is redelivered and reviewed a second time. The write may
  * also have reached GitHub even though the request reported an error.
  */
-async function writeState(deps: GhToolsDeps, state: ReviewState): Promise<{ url: string | null; error: string | null }> {
+async function writeState(deps: GhToolsDeps, state: ReviewState, majorDecision?: string): Promise<{ url: string | null; error: string | null }> {
   try {
-    const { url } = await deps.stateWriter.write(renderReviewState(state, deps.ctx.headSha));
+    const { url } = await deps.stateWriter.write(renderReviewState(state, deps.ctx.headSha, new Date(), majorDecision));
     return { url, error: null };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.warn(`[review-state] write failed: ${msg}`);
     return { url: null, error: msg };
   }
+}
+
+/**
+ * The `major_decision` input, present only on routes with
+ * majorDecisionLabel, so other routes never see it.
+ */
+function withMajorDecision<T extends z.ZodRawShape>(deps: GhToolsDeps, shape: T) {
+  return deps.ctx.majorDecisionLabel ? z.object({ ...shape, major_decision: majorDecisionSchema }) : z.object(shape);
+}
+
+function majorDecisionOf(input: object): MajorDecision | undefined {
+  return (input as { major_decision?: MajorDecision }).major_decision;
+}
+
+/** Labels the PR when the run judged it a major decision; returns the state comment's line. */
+async function labelMajorDecision(deps: GhToolsDeps, decision: MajorDecision | undefined): Promise<string | undefined> {
+  if (!deps.ctx.majorDecisionLabel || !decision?.needed) return undefined;
+  return majorDecisionLine(decision.reason, await applyMajorDecisionLabel(deps.octokit, deps.ctx));
 }
 
 /** Result field for a failed state write, telling the model the review is still done. */
@@ -231,7 +250,7 @@ Supply:
 The review is posted as event="COMMENT". REQUEST_CHANGES and APPROVE are not available to the reviewer: block/approve decisions belong to humans. If you have no inline comments, call \`skip_review\` instead. Exception: on a mention-triggered run with a reply for the requester, call this tool with \`comments: []\` and the reply in \`body\`.
 
 The review is anchored at the PR head SHA already loaded in the workspace context (${deps.ctx.headSha}). You do not pass it.`,
-    inputSchema: z.object({
+    inputSchema: withMajorDecision(deps, {
       body: z.string(),
       comments: z.array(z.object({
         path: z.string(),
@@ -244,9 +263,11 @@ The review is anchored at the PR head SHA already loaded in the workspace contex
       state: reviewStateSchema,
     }),
     callback: async (input) => {
+      const decision = majorDecisionOf(input);
       const invalid = tooLong('`body`', input.body)
         ?? input.comments.map((c, i) => tooLong(`comments[${i}].body`, c.body)).find((e) => e !== null)
-        ?? checkState(deps, input.state);
+        ?? checkState(deps, input.state)
+        ?? (decision ? validateMajorDecision(decision) : null);
       if (invalid) return `ERROR: nothing was posted. ${invalid}`;
       const taken = gate.acquire('post_review');
       if (taken) return taken;
@@ -281,7 +302,7 @@ The review is anchored at the PR head SHA already loaded in the workspace contex
       }
 
       // A failed state write is only reported; see writeState.
-      const state = await writeState(deps, input.state);
+      const state = await writeState(deps, input.state, await labelMajorDecision(deps, decision));
       if (deps.statusComment) {
         const reply = stripStateMarker(input.body).trim()
           || (input.comments.length > 0 ? `Review complete. See the ${input.comments.length} inline comment(s).` : NOTHING_NEW);
@@ -312,17 +333,19 @@ export function buildSkipTool(deps: GhToolsDeps) {
 `End the review without inline comments. Call this when nothing in this run warrants an inline comment. Do NOT use this as cover for missing findings. After a successful post_review or skip_review, later calls return an error and post nothing.
 
 Posts no review, but still writes \`state\` to the PR's review-state comment, so the PR shows the current verdict (for example "ready for human review", or open findings carried over from an earlier run).`,
-    inputSchema: z.object({
+    inputSchema: withMajorDecision(deps, {
       reason: z.string().min(1).describe('One-sentence rationale. Logged, and on a mention-triggered run shown to the requester.'),
       state: reviewStateSchema,
     }),
     callback: async (input) => {
-      const invalid = tooLong('`reason`', input.reason) ?? checkState(deps, input.state);
+      const decision = majorDecisionOf(input);
+      const invalid = tooLong('`reason`', input.reason) ?? checkState(deps, input.state)
+        ?? (decision ? validateMajorDecision(decision) : null);
       if (invalid) return `ERROR: nothing was posted. ${invalid}`;
       const taken = gate.acquire('skip_review');
       if (taken) return taken;
       // A failed state write is only reported; see writeState.
-      const state = await writeState(deps, input.state);
+      const state = await writeState(deps, input.state, await labelMajorDecision(deps, decision));
       // Mention-triggered runs: someone asked and is watching the status
       // comment, and a silent exit would leave it on "still working".
       if (deps.statusComment) {

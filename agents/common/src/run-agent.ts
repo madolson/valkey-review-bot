@@ -72,6 +72,8 @@ export const requestSchema = z.object({
   // new trigger does not fail the run.
   trigger: z.string().optional(),
   skip_drafts: z.boolean().optional(),
+  // The route's majorDecisionLabel, on every run of a route that sets it.
+  major_decision_label: z.boolean().optional(),
 });
 
 export type Payload = z.infer<typeof requestSchema>;
@@ -276,7 +278,7 @@ export function createReviewHandler(opts: ReviewHandlerOpts): (payload: Payload)
         };
         return;
       }
-      const ctx = prepared;
+      const ctx = { ...prepared, majorDecisionLabel: payload.major_decision_label === true };
 
       // Graduated skills: patterns that crossed the reinforcement
       // threshold and were published by the curator. They go into the

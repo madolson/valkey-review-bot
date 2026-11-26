@@ -226,6 +226,7 @@ reviewer. The token broker issues tokens only for these repositories.
 | `skipDrafts` | `false` | Draft pull requests are not reviewed when opened or pushed to; the review runs when the draft is marked ready. |
 | `mentionOnly` | `false` | No automatic reviews, on open, reopen or new commits. Reviews run only when a maintainer tags the bot. |
 | `authorAllowlist` | `[]` | When not empty, only pull requests by these logins get automatic reviews. |
+| `majorDecisionLabel` | `false` | Reviews add the `major-decision-pending` label to pull requests that need a major decision under Valkey's [GOVERNANCE.md](https://github.com/valkey-io/valkey/blob/unstable/GOVERNANCE.md), and give the reason in the review state comment. The bot only adds the label: it skips a pull request that has any `major-decision-*` label, or from which `major-decision-pending` was ever removed. The reviewer's `pull_requests: write` token covers it. The example enables it on the Valkey route. |
 
 ### `curatorOnlyRoutes`
 

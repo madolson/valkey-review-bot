@@ -43,6 +43,8 @@ export interface ReviewEnvelope {
   readonly trigger?: AutomaticTrigger;
   /** Automatic reviews: the route's skipDrafts setting. */
   readonly skip_drafts?: boolean;
+  /** Set on every run of a route with majorDecisionLabel. */
+  readonly major_decision_label?: true;
 }
 
 /** "push" is pull_request synchronize: new commits. */

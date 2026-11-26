@@ -18,7 +18,8 @@
       "id": "valkey-review",
       "reviewer": "valkey-review",
       "repo": "your-org/valkey",
-      "threadReplyReview": true
+      "threadReplyReview": true,
+      "majorDecisionLabel": true
     },
     {
       "id": "valkey-glide-review",

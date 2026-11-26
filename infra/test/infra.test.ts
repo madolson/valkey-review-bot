@@ -538,10 +538,12 @@ describe('webhook', () => {
   });
 
   test('route maps: review routes by repository, curator map adds curator-only repositories', () => {
-    const config = parseDeploymentConfig(fixture());
+    const raw = fixture();
+    raw.routes[0].majorDecisionLabel = true;
+    const config = parseDeploymentConfig(raw);
     const maps = routeMaps(config.routes, config.curatorOnlyRoutes, (id) => `https://queue/${id}`);
     expect(maps.review).toEqual({
-      'example-org/valkey': { routeId: 'valkey-review', queueUrl: 'https://queue/valkey-review', reviewerId: 'valkey-review' },
+      'example-org/valkey': { routeId: 'valkey-review', queueUrl: 'https://queue/valkey-review', reviewerId: 'valkey-review', majorDecisionLabel: true },
       'example-org/valkey-glide': {
         routeId: 'valkey-glide-review', queueUrl: 'https://queue/valkey-glide-review', reviewerId: 'valkey-glide-review',
         skipDrafts: true, threadReplyReview: true,

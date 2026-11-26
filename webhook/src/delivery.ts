@@ -415,6 +415,7 @@ export function createDeliveryHandler(
         pending_marker: marker,
         trigger,
         skip_drafts: route.skipDrafts,
+        ...(route.majorDecisionLabel ? { major_decision_label: true } : {}),
       };
       const delay = pushed ? { delaySeconds: config.pushReviewDelaySeconds } : undefined;
       await deps.sendMessage(route.queueUrl, envelope, { repo, pr_number: prNumber, action }, delay);
@@ -433,7 +434,10 @@ export function createDeliveryHandler(
       claim: (key) => deps.store.claim(key, { action: 'mention' }),
       release,
       approveInstruction: deps.approveInstruction,
-      enqueue: (envelope) => deps.sendMessage(route.queueUrl, envelope, {
+      enqueue: (envelope) => deps.sendMessage(route.queueUrl, {
+        ...envelope,
+        ...(route.majorDecisionLabel ? { major_decision_label: true } : {}),
+      }, {
         repo: target.repo,
         pr_number: envelope.pr_number,
         action: 'mention',

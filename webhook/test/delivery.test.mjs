@@ -142,6 +142,33 @@ test('an opened PR is queued on its route with the runtime payload', async () =>
   assert.equal(store.pending.get(`${REPO}#7`), 'pending-1', 'it holds the marker until the worker starts it');
 });
 
+test('a majorDecisionLabel route asks every run, automatic or @mention, to label major decisions', async () => {
+  const routes = JSON.parse(ENV.REVIEW_ROUTE_MAP_JSON);
+  routes[REPO].majorDecisionLabel = true;
+  const { handler, sent } = setup({
+    env: { REVIEW_ROUTE_MAP_JSON: JSON.stringify(routes) },
+    github: {
+      [`GET repos/${REPO}/collaborators/maintainer/permission`]: { status: 200, json: { permission: 'write' } },
+      [`GET repos/${REPO}/pulls/7`]: { status: 200, json: { state: 'open', head: { sha: 'abc123' } } },
+      [`POST repos/${REPO}/issues/7/comments`]: { status: 201, json: { id: 5 } },
+    },
+  });
+  await handler(delivery('pull_request', prEvent('opened')));
+  await handler(delivery('issue_comment', {
+    action: 'created',
+    installation: { id: 42 },
+    repository: { full_name: REPO },
+    sender: { login: 'maintainer' },
+    issue: { number: 7, pull_request: {}, user: { login: 'author' } },
+    comment: { id: 11, body: '@example-reviewer review please', user: { login: 'maintainer' }, author_association: 'MEMBER' },
+  }));
+  assert.deepEqual(sent.map((s) => [s.attributes.action, s.body.major_decision_label]), [['opened', true], ['mention', true]]);
+
+  const off = setup();
+  await off.handler(delivery('pull_request', prEvent('opened')));
+  assert.equal('major_decision_label' in off.sent[0].body, false, 'off by default');
+});
+
 test('a duplicate delivery is skipped and does not use budget', async () => {
   const { handler, sent, store } = setup();
   await handler(delivery('pull_request', prEvent('opened')));
