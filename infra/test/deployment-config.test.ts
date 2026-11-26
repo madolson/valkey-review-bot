@@ -67,7 +67,7 @@ describe('defaults', () => {
     expect(config.github.knownBotLogins).toBeUndefined();
     expect(config.routes[0]).toEqual({
       id: 'valkey-review', reviewer: 'valkey-review', repo: 'example-org/valkey',
-      threadReplyReview: false, skipDrafts: false, mentionOnly: false, authorAllowlist: [],
+      threadReplyReview: false, skipDrafts: false, mentionOnly: false, authorAllowlist: [], majorDecisionLabel: false,
     });
   });
 
@@ -81,6 +81,8 @@ describe('defaults', () => {
     for (const route of config.routes) expect(route.repo.startsWith('your-org/')).toBe(true);
     // Maintainers can answer the bot in its review threads on every route.
     for (const route of config.routes) expect({ route: route.id, threadReplyReview: route.threadReplyReview }).toEqual({ route: route.id, threadReplyReview: true });
+    // Valkey's governance defines major decisions; only its route labels them.
+    expect(config.routes.map((r) => [r.reviewer, r.majorDecisionLabel])).toEqual([['valkey-review', true], ['valkey-glide-review', false]]);
     // The example ships in report mode.
     expect(config.skillLifecycle).toMatchObject({ applyEdits: false, retireSkills: false, openPullRequests: false });
     expect(config.skillsRepo?.repo.startsWith('your-org/')).toBe(true);
@@ -236,8 +238,10 @@ describe('routes', () => {
     const message = problems(withChange((raw) => {
       raw.routes[0].skipDrafts = 'yes';
       raw.routes[0].authorAllowlist = ['bad login'];
+      raw.routes[1].majorDecisionLabel = 'yes';
     }));
     expect(message).toContain('routes[0].skipDrafts must be true or false');
+    expect(message).toContain('routes[1].majorDecisionLabel must be true or false');
     expect(message).toContain('routes[0].authorAllowlist[0]');
   });
 });

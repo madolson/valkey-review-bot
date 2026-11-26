@@ -38,7 +38,7 @@ test('routes are keyed by lowercased repository and carry their route id', () =>
   const { reviewRoutes } = loadReceiverConfig(base);
   assert.deepEqual(reviewRoutes.get('example-org/valkey'), {
     routeId: 'valkey-review', queueUrl: 'https://sqs.example/q1', reviewerId: 'valkey-review',
-    authorAllowlist: [], mentionOnly: false, skipDrafts: false, threadReplyReview: false,
+    authorAllowlist: [], mentionOnly: false, skipDrafts: false, threadReplyReview: false, majorDecisionLabel: false,
   });
   const glide = reviewRoutes.get('example-org/valkey-glide');
   assert.deepEqual(glide.authorAllowlist, ['some-maintainer']);
@@ -58,6 +58,8 @@ test('route entries are validated', () => {
   const good = { routeId: 'r', queueUrl: 'q', reviewerId: 'v' };
   assert.throws(() => loadReceiverConfig(withRoute({ ...good, routeId: undefined })), /routeId must be a non-empty string/);
   assert.throws(() => loadReceiverConfig(withRoute({ ...good, skipDrafts: 'yes' })), /skipDrafts must be true or false/);
+  assert.throws(() => loadReceiverConfig(withRoute({ ...good, majorDecisionLabel: 'yes' })), /majorDecisionLabel must be true or false/);
+  assert.equal(loadReceiverConfig(withRoute({ ...good, majorDecisionLabel: true })).reviewRoutes.get('o/r').majorDecisionLabel, true);
   assert.throws(() => loadReceiverConfig(withRoute({ ...good, authorAllowlist: 'someone' })), /authorAllowlist/);
   assert.throws(() => loadReceiverConfig({ ...base, REVIEW_ROUTE_MAP_JSON: '[]' }), /JSON object/);
   assert.throws(() => loadReceiverConfig({ ...base, REVIEW_ROUTE_MAP_JSON: '{' }), /REVIEW_ROUTE_MAP_JSON is not valid JSON/);

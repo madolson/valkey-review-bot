@@ -44,6 +44,7 @@ export interface RouteConfig {
   readonly skipDrafts: boolean;
   readonly mentionOnly: boolean;
   readonly authorAllowlist: readonly string[];
+  readonly majorDecisionLabel: boolean;
 }
 
 export interface CuratorOnlyRouteConfig {
@@ -373,7 +374,7 @@ export function parseDeploymentConfig(raw: unknown, env: { readonly CDK_DEFAULT_
 
   const routes: RouteConfig[] = r.array(top.routes, 'routes', undefined).map((value, i) => {
     const at = `routes[${i}]`;
-    const o = r.object(value, at, ['id', 'reviewer', 'repo', 'threadReplyReview', 'skipDrafts', 'mentionOnly', 'authorAllowlist']);
+    const o = r.object(value, at, ['id', 'reviewer', 'repo', 'threadReplyReview', 'skipDrafts', 'mentionOnly', 'authorAllowlist', 'majorDecisionLabel']);
     return {
       id: r.string(o.id, `${at}.id`, { pattern: ROUTE_ID, hint: 'letters, digits and hyphens' }),
       reviewer: r.oneOf(o.reviewer, `${at}.reviewer`, REVIEWER_IDS),
@@ -382,6 +383,7 @@ export function parseDeploymentConfig(raw: unknown, env: { readonly CDK_DEFAULT_
       skipDrafts: r.boolean(o.skipDrafts, `${at}.skipDrafts`, false),
       mentionOnly: r.boolean(o.mentionOnly, `${at}.mentionOnly`, false),
       authorAllowlist: r.strings(o.authorAllowlist, `${at}.authorAllowlist`, { pattern: LOGIN, hint: 'a GitHub login', fallback: [] }),
+      majorDecisionLabel: r.boolean(o.majorDecisionLabel, `${at}.majorDecisionLabel`, false),
     };
   });
   if (Array.isArray(top.routes) && routes.length === 0) r.fail('routes', 'must list at least one route');

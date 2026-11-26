@@ -113,6 +113,8 @@ export interface PrContext {
   readonly upstreamRepo: string;
   /** Release lines with recent commits, highest version first; null when the fetch failed. */
   readonly releaseLines: readonly ReleaseLine[] | null;
+  /** The route's majorDecisionLabel setting: the terminal tools may add the major-decision label. */
+  readonly majorDecisionLabel?: boolean;
   readonly workspacePath: string;
   readonly diffRefSpec: string; // "<mergeBaseSha>..<headSha>"
 }

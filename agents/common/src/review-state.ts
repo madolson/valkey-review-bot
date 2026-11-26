@@ -101,7 +101,8 @@ function findingLine(f: ReviewState['findings'][number]): string {
   return `- ${minor}${where}${oneLine(f.summary)}`;
 }
 
-export function renderReviewState(state: ReviewState, headSha: string, now: Date = new Date()): string {
+/** `majorDecision` is the line from major-decision.ts, when the run judged the PR to need one. */
+export function renderReviewState(state: ReviewState, headSha: string, now: Date = new Date(), majorDecision?: string): string {
   const open = state.findings.filter((f) => !f.resolved);
   const resolved = state.findings.filter((f) => f.resolved);
   const lines: string[] = [STATE_MARKER, '### Review state', ''];
@@ -135,6 +136,8 @@ export function renderReviewState(state: ReviewState, headSha: string, now: Date
   if (state.direction.trim()) {
     lines.push('**Direction**', state.direction.trim(), '');
   }
+
+  if (majorDecision) lines.push(majorDecision, '');
 
   const stamp = now.toISOString().slice(0, 16).replace('T', ' ');
   lines.push(`<sub>Updated for ${headSha.slice(0, 10)} at ${stamp} UTC. The bot rewrites this comment on every review.</sub>`);
