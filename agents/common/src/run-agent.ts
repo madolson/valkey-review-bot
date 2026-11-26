@@ -12,6 +12,7 @@ import { createStatusComment, type StatusComment } from './status-comment.js';
 import { ModelCallLimit, ReviewConversationManager, StreamStallRetryStrategy, textDelta } from './agent-loop.js';
 import { createConverseModel, createMantleModel, isMantleModel } from './models.js';
 import { isTerminalCallbackWired, type TerminalToolName } from './tools/gh.js';
+import { createBackportBoards, type BackportBoards } from './backport-boards.js';
 
 /**
  * Shared bedrock-agentcore entrypoint + Strands loop.
@@ -40,6 +41,8 @@ export interface AssembleBaseOpts {
    * when they succeed, and that is how the run knows the review is done.
    */
   readonly onTerminal?: (tool: TerminalToolName, result: string) => void;
+  /** Present when the repository has backport boards configured. Pass this to assembleCommonTools. */
+  readonly backportBoards?: BackportBoards;
 }
 
 export type AssembleTools = (opts: AssembleBaseOpts) => Promise<readonly unknown[]>;
@@ -293,6 +296,25 @@ export function createReviewHandler(opts: ReviewHandlerOpts): (payload: Payload)
         yield { event: 'status', data: { phase: 'graduated_skills_loaded', count: grads.length } };
       }
 
+      // Boards take a token of their own, with the organization project
+      // access the review token lacks. The broker is asked for it on the
+      // first board request, so a run that adds nothing never holds one.
+      const boardsConfig = env.backportProjects[payload.repo.toLowerCase()];
+      const projectsOctokit = boardsConfig && deps.createOctokit(deps.createTokenSource({
+        brokerFunction: env.tokenBrokerFunction,
+        region: env.region,
+        installationId: payload.installation_id,
+        repo: payload.repo,
+        projects: true,
+      }));
+      const backportBoards = boardsConfig && projectsOctokit && createBackportBoards({
+        graphql: (query, variables) => projectsOctokit.graphql(query, variables),
+        config: boardsConfig,
+        owner: ctx.owner,
+        repo: ctx.repo,
+        prNumber: ctx.prNumber,
+      });
+
       yield { event: 'status', data: { phase: 'tools' } };
       const tools = await assembleTools({
         ctx,
@@ -302,6 +324,7 @@ export function createReviewHandler(opts: ReviewHandlerOpts): (payload: Payload)
         env,
         statusComment,
         onTerminal,
+        backportBoards,
       });
       if (!isTerminalCallbackWired(onTerminal)) {
         throw new Error('assembleTools did not pass onTerminal to assembleCommonTools, so the run could not tell when the review is done');

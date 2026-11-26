@@ -2,7 +2,7 @@ import * as path from 'path';
 import * as cdk from 'aws-cdk-lib';
 import { CuratorAgentStack } from './curator-agent-stack';
 import { DecayCronStack } from './decay-cron-stack';
-import { type DeploymentConfig, REVIEWER_IDS, type ReviewerId, tokenBrokerRepos } from './deployment-config';
+import { backportProjects, type DeploymentConfig, REVIEWER_IDS, type ReviewerId, tokenBrokerRepos } from './deployment-config';
 import { SubstrateStack } from './substrate-stack';
 import { ValkeyReviewAgentStack } from './valkey-review-agent-stack';
 import { WebhookStack } from './webhook-stack';
@@ -45,6 +45,7 @@ export function addValkeyReviewerStacks(
     description: 'valkey-reviewer shared resources: assets bucket, KMS key, GitHub token broker and run heartbeat table.',
     github: config.github,
     allowedRepos: Object.fromEntries(REVIEWER_IDS.map((r) => [r, tokenBrokerRepos(config, r)])) as Record<ReviewerId, string[]>,
+    projectRepos: Object.fromEntries(REVIEWER_IDS.map((r) => [r, Object.keys(backportProjects(config, r))])),
     ...(config.skillsRepo ? { skillsRepo: config.skillsRepo } : {}),
   });
 
@@ -68,6 +69,7 @@ export function addValkeyReviewerStacks(
       githubAppId: config.github.appId,
       skillsRegistry: config.skillsRegistries[reviewerId],
       upstreamRepo: config.upstreamRepos[reviewerId],
+      backportProjects: backportProjects(config, reviewerId),
       agent: config.agents[reviewerId],
       models: config.models,
     }));

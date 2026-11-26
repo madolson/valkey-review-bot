@@ -10,7 +10,7 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as agentcore from 'aws-cdk-lib/aws-bedrockagentcore';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import { modelAccessStatements } from './bedrock-arns';
-import type { ModelsConfig, ReviewerAgentConfig, ReviewerId } from './deployment-config';
+import type { BackportProjectsConfig, ModelsConfig, ReviewerAgentConfig, ReviewerId } from './deployment-config';
 import { createRuntimeRole, registryResources } from './grants';
 
 /**
@@ -43,6 +43,8 @@ export interface AgentStackProps extends cdk.StackProps {
   readonly skillsRegistry: string;
   /** "owner/name" whose release branches the reviewer fetches; empty uses the PR's repository. */
   readonly upstreamRepo: string;
+  /** BACKPORT_PROJECTS_JSON; see agents/common/src/backport-boards.ts. Empty adds to no board. */
+  readonly backportProjects?: Readonly<Record<string, BackportProjectsConfig>>;
   readonly agent: ReviewerAgentConfig;
   readonly models: Pick<ModelsConfig,
     'reviewer' | 'summarizer' | 'profileRegions' | 'mantleRegion' | 'mantleGrantRegions' | 'extraGrants'>;
@@ -169,6 +171,9 @@ export class ValkeyReviewAgentStack extends cdk.Stack {
         ALLOW_WRITE: String(props.agent.allowWrite),
         ALLOW_BUILD: String(props.agent.allowBuild),
         UPSTREAM_REPO: props.upstreamRepo,
+        ...(props.backportProjects && Object.keys(props.backportProjects).length > 0
+          ? { BACKPORT_PROJECTS_JSON: JSON.stringify(props.backportProjects) }
+          : {}),
       },
     });
     // The service checks image access when it creates the runtime, so the

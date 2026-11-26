@@ -1,4 +1,5 @@
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
+import type { BackportProjectsConfig } from './backport-boards.js';
 
 /**
  * Reasoning effort levels accepted by both model paths: Converse
@@ -56,6 +57,11 @@ export interface AgentEnv {
    * backport check reads. Empty means the PR's own repository.
    */
   readonly upstreamRepo: string;
+  /**
+   * Backport boards per repository, keyed by lowercased "owner/name". A
+   * repository without an entry is never added to a board.
+   */
+  readonly backportProjects: Readonly<Record<string, BackportProjectsConfig>>;
 }
 
 const DEFAULT_MAX_ITERATIONS = 150;
@@ -106,6 +112,33 @@ function upstreamRepo(env: EnvSource): string {
   return value;
 }
 
+function backportProjects(env: EnvSource): Record<string, BackportProjectsConfig> {
+  const raw = optional(env, 'BACKPORT_PROJECTS_JSON');
+  if (!raw) return {};
+  const fail = (why: string): never => { throw new Error(`BACKPORT_PROJECTS_JSON ${why}`); };
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    fail('is not valid JSON');
+  }
+  const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
+  if (!isObject(parsed)) fail('must be an object keyed by "owner/name"');
+  const out: Record<string, BackportProjectsConfig> = {};
+  for (const [repo, entry] of Object.entries(parsed as Record<string, unknown>)) {
+    if (!REPO_RE.test(repo)) fail(`key "${repo}" must look like "owner/name"`);
+    if (!isObject(entry) || typeof entry.owner !== 'string' || !entry.owner || !isObject(entry.boards)) {
+      fail(`["${repo}"] must be { owner, boards }`);
+    }
+    const { owner, boards } = entry as { owner: string; boards: Record<string, unknown> };
+    for (const [branch, number] of Object.entries(boards)) {
+      if (!Number.isSafeInteger(number) || (number as number) < 1) fail(`["${repo}"].boards["${branch}"] must be a project number`);
+    }
+    out[repo.toLowerCase()] = { owner, boards: boards as Record<string, number> };
+  }
+  return out;
+}
+
 export function loadEnv(env: EnvSource = process.env): AgentEnv {
   const githubAppId = required(env, 'GITHUB_APP_ID');
   if (!/^\d+$/.test(githubAppId)) throw new Error(`GITHUB_APP_ID must be a numeric app id, got "${githubAppId}"`);
@@ -138,6 +171,7 @@ export function loadEnv(env: EnvSource = process.env): AgentEnv {
     allowBuild,
     allowMake: allowBuild,
     upstreamRepo: upstreamRepo(env),
+    backportProjects: backportProjects(env),
   };
 }
 

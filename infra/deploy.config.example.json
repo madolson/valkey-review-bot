@@ -18,7 +18,11 @@
       "id": "valkey-review",
       "reviewer": "valkey-review",
       "repo": "your-org/valkey",
-      "threadReplyReview": true
+      "threadReplyReview": true,
+      "backportProjects": {
+        "owner": "valkey-io",
+        "boards": { "7.2": 1, "8.0": 2, "8.1": 14, "9.0": 18, "9.1": 41, "9.2": 51 }
+      }
     },
     {
       "id": "valkey-glide-review",

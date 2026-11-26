@@ -44,6 +44,18 @@ export interface RouteConfig {
   readonly skipDrafts: boolean;
   readonly mentionOnly: boolean;
   readonly authorAllowlist: readonly string[];
+  /**
+   * The organization's backport project board per release branch, as in
+   * valkey-io/valkey-ci-agent's repos.yml. When set, a review that says a
+   * backport is needed adds the pull request to the boards of those
+   * branches. Unset (the default) adds to no board.
+   */
+  readonly backportProjects?: BackportProjectsConfig;
+}
+
+export interface BackportProjectsConfig {
+  readonly owner: string;
+  readonly boards: Readonly<Record<string, number>>;
 }
 
 export interface CuratorOnlyRouteConfig {
@@ -373,7 +385,8 @@ export function parseDeploymentConfig(raw: unknown, env: { readonly CDK_DEFAULT_
 
   const routes: RouteConfig[] = r.array(top.routes, 'routes', undefined).map((value, i) => {
     const at = `routes[${i}]`;
-    const o = r.object(value, at, ['id', 'reviewer', 'repo', 'threadReplyReview', 'skipDrafts', 'mentionOnly', 'authorAllowlist']);
+    const o = r.object(value, at, ['id', 'reviewer', 'repo', 'threadReplyReview', 'skipDrafts', 'mentionOnly', 'authorAllowlist', 'backportProjects']);
+    const backportProjects = o.backportProjects === undefined ? undefined : parseBackportProjects(r, o.backportProjects, `${at}.backportProjects`);
     return {
       id: r.string(o.id, `${at}.id`, { pattern: ROUTE_ID, hint: 'letters, digits and hyphens' }),
       reviewer: r.oneOf(o.reviewer, `${at}.reviewer`, REVIEWER_IDS),
@@ -382,6 +395,7 @@ export function parseDeploymentConfig(raw: unknown, env: { readonly CDK_DEFAULT_
       skipDrafts: r.boolean(o.skipDrafts, `${at}.skipDrafts`, false),
       mentionOnly: r.boolean(o.mentionOnly, `${at}.mentionOnly`, false),
       authorAllowlist: r.strings(o.authorAllowlist, `${at}.authorAllowlist`, { pattern: LOGIN, hint: 'a GitHub login', fallback: [] }),
+      ...(backportProjects ? { backportProjects } : {}),
     };
   });
   if (Array.isArray(top.routes) && routes.length === 0) r.fail('routes', 'must list at least one route');
@@ -450,6 +464,22 @@ export function parseDeploymentConfig(raw: unknown, env: { readonly CDK_DEFAULT_
     ...(skillsRepo ? { skillsRepo } : {}),
     dailyReviewBudget, maxAutomaticReviewsPerPr, pushReviewDelaySeconds,
   };
+}
+
+function parseBackportProjects(r: Reader, value: unknown, at: string): BackportProjectsConfig {
+  const o = r.object(value, at, ['owner', 'boards']);
+  const owner = r.string(o.owner, `${at}.owner`, { pattern: LOGIN, hint: 'the organization that owns the boards' });
+  const boardsRaw = o.boards;
+  const boards: Record<string, number> = {};
+  if (typeof boardsRaw !== 'object' || boardsRaw === null || Array.isArray(boardsRaw) || Object.keys(boardsRaw).length === 0) {
+    r.fail(`${at}.boards`, 'must be an object mapping release branches to project numbers');
+  } else {
+    for (const [branch, number] of Object.entries(boardsRaw)) {
+      if (!BRANCH.test(branch)) r.fail(`${at}.boards`, `has ${JSON.stringify(branch)}, which is not a branch name`);
+      boards[branch] = r.number(number, `${at}.boards.${branch}`, { fallback: 0, min: 1, max: 1_000_000, integer: true });
+    }
+  }
+  return { owner, boards };
 }
 
 const HALF_LIFE_DAYS = { min: 0, max: 3650, integer: false, minExclusive: true } as const;
@@ -673,6 +703,18 @@ export function loadDeploymentConfig(contextValue: unknown, env: NodeJS.ProcessE
 /** Repositories one reviewer's token broker may issue tokens for: that reviewer's review routes. */
 export function tokenBrokerRepos(config: DeploymentConfig, reviewerId: ReviewerId): string[] {
   return [...new Set(config.routes.filter((route) => route.reviewer === reviewerId).map((route) => route.repo))];
+}
+
+/**
+ * BACKPORT_PROJECTS_JSON for one reviewer's runtime: the backport boards
+ * of its routes that have them, keyed by lowercased repository. The
+ * repositories are also the only ones its token broker issues a projects
+ * token for.
+ */
+export function backportProjects(config: DeploymentConfig, reviewerId: ReviewerId): Record<string, BackportProjectsConfig> {
+  return Object.fromEntries(config.routes
+    .filter((route) => route.reviewer === reviewerId && route.backportProjects)
+    .map((route) => [route.repo.toLowerCase(), route.backportProjects!]));
 }
 
 /**

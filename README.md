@@ -17,7 +17,9 @@ The reviewer runs as a GitHub App. On the Valkey repositories it appears as
   - whether the change is ready for a human reviewer, or what still blocks it;
   - the risk of merging it, and why;
   - open and resolved findings, carried over between reviews;
-  - whether the fix needs a backport, and to which maintained release lines;
+  - whether the fix needs a backport, and to which maintained release lines. On
+    repositories that enable it, the pull request is added to those release lines'
+    backport boards, and the comment names the boards it was added to;
   - a different approach, only when the reviewer checked one against the code and found
     it clearly better.
 - The reviewer never approves or requests changes. Those decisions stay with maintainers.

@@ -16,15 +16,22 @@ import { fetchRepoInstallation, type GitHubApi } from './github.js';
 // requested set must be a subset of what the installation grants.
 export const TOKEN_PERMISSIONS = { pull_requests: 'write', metadata: 'read' } as const;
 
+// A request with `projects: true` gets a token for adding the pull request
+// to the organization's backport boards (agents/common/src/backport-boards.ts)
+// and nothing else. Its own token, so an App without organization Projects
+// access still gets review tokens.
+export const PROJECT_TOKEN_PERMISSIONS = { organization_projects: 'write', pull_requests: 'read', metadata: 'read' } as const;
+
 export interface TokenRequest {
   readonly installationId: number;
   readonly repositoryNames: string[];
-  readonly permissions: typeof TOKEN_PERMISSIONS;
+  readonly permissions: typeof TOKEN_PERMISSIONS | typeof PROJECT_TOKEN_PERMISSIONS;
 }
 
 export interface BrokerEvent {
   readonly installation_id?: unknown;
   readonly repo?: unknown;
+  readonly projects?: unknown;
 }
 
 export type BrokerResult = { token: string; expires_at: string } | { error: string };
@@ -32,6 +39,8 @@ export type BrokerResult = { token: string; expires_at: string } | { error: stri
 export interface TokenBrokerDeps {
   /** Repositories ("owner/name") a token may be issued for. */
   readonly allowedRepos: readonly string[];
+  /** Repositories with backport boards configured: the only ones a projects token may be issued for. */
+  readonly projectRepos?: readonly string[];
   /** GitHub REST authenticated as the App itself (JWT). */
   readonly appApi: () => Promise<GitHubApi>;
   /** An installation token, as @octokit/auth-app returns it. */
@@ -42,6 +51,7 @@ export interface TokenBrokerDeps {
 
 export function createTokenBroker(deps: TokenBrokerDeps): (event: BrokerEvent) => Promise<BrokerResult> {
   const allowed: ReadonlySet<string> = new Set(deps.allowedRepos.map((r) => r.toLowerCase()));
+  const projectRepos: ReadonlySet<string> = new Set((deps.projectRepos ?? []).map((r) => r.toLowerCase()));
   const log = deps.log ?? console.log;
   const warn = deps.warn ?? console.warn;
 
@@ -55,6 +65,11 @@ export function createTokenBroker(deps: TokenBrokerDeps): (event: BrokerEvent) =
       warn(`[token-broker] refused repo=${repo}`);
       return { error: `repo ${repo} is not a routed repository` };
     }
+    const projects = event.projects === true;
+    if (projects && !projectRepos.has(repo.toLowerCase())) {
+      warn(`[token-broker] refused projects token for repo=${repo}`);
+      return { error: `repo ${repo} has no backport boards configured` };
+    }
 
     const installation = await fetchRepoInstallation(await deps.appApi(), repo);
     if (!installation) {
@@ -67,8 +82,9 @@ export function createTokenBroker(deps: TokenBrokerDeps): (event: BrokerEvent) =
       return { error: `installation ${installationId} is not the App's installation on ${repo}` };
     }
 
-    const result = await deps.issueToken({ installationId, repositoryNames: [name], permissions: TOKEN_PERMISSIONS });
-    log(`[token-broker] issued repo=${repo} installation=${installationId} expires=${result.expiresAt}`);
+    const permissions = projects ? PROJECT_TOKEN_PERMISSIONS : TOKEN_PERMISSIONS;
+    const result = await deps.issueToken({ installationId, repositoryNames: [name], permissions });
+    log(`[token-broker] issued repo=${repo} installation=${installationId}${projects ? ' projects' : ''} expires=${result.expiresAt}`);
     return { token: result.token, expires_at: result.expiresAt };
   };
 }

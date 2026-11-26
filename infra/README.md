@@ -226,6 +226,7 @@ reviewer. The token broker issues tokens only for these repositories.
 | `skipDrafts` | `false` | Draft pull requests are not reviewed when opened or pushed to; the review runs when the draft is marked ready. |
 | `mentionOnly` | `false` | No automatic reviews, on open, reopen or new commits. Reviews run only when a maintainer tags the bot. |
 | `authorAllowlist` | `[]` | When not empty, only pull requests by these logins get automatic reviews. |
+| `backportProjects` | unset | `{ "owner": "<org>", "boards": { "<release branch>": <project number>, ... } }`: the release branches' backport boards, as in [valkey-ci-agent's `repos.yml`](https://github.com/valkey-io/valkey-ci-agent/blob/main/repos.yml). When a review says a backport is needed, the pull request is added to the boards of those branches with Status "To be backported", which the valkey-ci-agent sweep picks up once it merges. A board it is already on is left alone. Unset adds to no board. Needs the App's organization Projects permission (see below). The example sets it for Valkey. |
 
 ### `curatorOnlyRoutes`
 
@@ -654,6 +655,13 @@ Contents either way: the receiver for `pull_requests: write`,
 `webhook/src/github.ts`), and the reviewer brokers for
 `pull_requests: write` and `metadata: read`. So their tokens, and the
 reviewer runtimes, never get Contents permission.
+
+A route with `backportProjects` also lets its reviewer broker issue a
+second token, with `organization_projects: write`, `pull_requests: read`
+and `metadata: read`, used only to add the pull request to the boards. The
+App needs the organization permission Projects (read and write), and the
+organization that owns the boards must approve it. Without it, boards are
+not written and reviews go on as before.
 
 The commits are made with the broker's token, so GitHub authors them as
 the App's bot user. Their `Signed-off-by` line is `skillsRepo.signOff`, or
