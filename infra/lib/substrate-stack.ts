@@ -15,6 +15,8 @@ export interface SubstrateStackProps extends cdk.StackProps {
   readonly github: Pick<GitHubConfig, 'appId' | 'appSecretName'>;
   /** Per reviewer, the repositories ("owner/name") its token broker may issue tokens for. */
   readonly allowedRepos: Readonly<Record<ReviewerId, readonly string[]>>;
+  /** Per reviewer, the repositories its broker may issue a backport-boards token for. */
+  readonly projectRepos?: Readonly<Partial<Record<ReviewerId, readonly string[]>>>;
   /** The bot's own repository. When set, a token broker for it is created for the curator. */
   readonly skillsRepo?: Pick<SkillsRepoConfig, 'repo' | 'appSecretName'>;
 }
@@ -77,6 +79,7 @@ export class SubstrateStack extends cdk.Stack {
     const brokers = new Map<ReviewerId, lambda.IFunction>();
     for (const [reviewerId, repos] of Object.entries(props.allowedRepos) as [ReviewerId, readonly string[]][]) {
       const name = brokerConstructName(reviewerId);
+      const projectRepos = props.projectRepos?.[reviewerId] ?? [];
       const broker = new nodelambda.NodejsFunction(this, `TokenBroker${name}Fn`, {
         entry: path.join(webhookRoot, 'src', 'token-broker.ts'),
         depsLockFilePath: path.join(webhookRoot, 'package-lock.json'),
@@ -89,6 +92,7 @@ export class SubstrateStack extends cdk.Stack {
           GITHUB_SECRET_ARN: this.githubAppSecret.secretArn,
           GITHUB_APP_ID: props.github.appId,
           ALLOWED_REPOS_JSON: JSON.stringify(repos),
+          ...(projectRepos.length > 0 ? { PROJECT_REPOS_JSON: JSON.stringify(projectRepos) } : {}),
         },
         logGroup: new logs.LogGroup(this, `TokenBroker${name}Logs`, { retention: logs.RetentionDays.ONE_MONTH }),
         bundling: { externalModules: ['@aws-sdk/*'], target: 'node24', minify: false, sourceMap: true },

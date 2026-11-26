@@ -15,6 +15,7 @@ export async function assembleTools(opts: AssembleBaseOpts): Promise<readonly un
     allowWrite: opts.allowWrite,
     statusComment: opts.statusComment,
     onTerminal: opts.onTerminal,
+    backportBoards: opts.backportBoards,
   });
 
   const extras: unknown[] = [];

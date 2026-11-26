@@ -23,6 +23,8 @@ export function createTokenSource(opts: {
   region: string;
   installationId: number;
   repo: string;
+  /** A token for the organization's projects instead of the pull request (see webhook/src/broker.ts). */
+  projects?: boolean;
 }): TokenSource {
   const lambda = new LambdaClient({ region: opts.region });
   let current: { token: string; expiresAt: number } | null = null;
@@ -31,7 +33,9 @@ export function createTokenSource(opts: {
   async function fetchToken(): Promise<string> {
     const resp = await lambda.send(new InvokeCommand({
       FunctionName: opts.brokerFunction,
-      Payload: Buffer.from(JSON.stringify({ installation_id: opts.installationId, repo: opts.repo })),
+      Payload: Buffer.from(JSON.stringify({
+        installation_id: opts.installationId, repo: opts.repo, ...(opts.projects ? { projects: true } : {}),
+      })),
     }));
     if (resp.FunctionError) throw new Error(`token broker failed (${resp.FunctionError})`);
     const out = JSON.parse(Buffer.from(resp.Payload ?? new Uint8Array()).toString('utf8')) as

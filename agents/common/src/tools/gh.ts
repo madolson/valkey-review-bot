@@ -6,6 +6,7 @@ import type { StatusComment } from '../status-comment.js';
 import type { TokenSource } from '../github-auth.js';
 import { reviewStateSchema, renderReviewState, stripStateMarker, validateReviewState, type ReviewState, type StateCommentWriter } from '../review-state.js';
 import { runBounded } from './spawn.js';
+import type { AddedBoard, BackportBoards } from '../backport-boards.js';
 
 /**
  * Endpoint shapes gh_api_read may GET, after the "repos/OWNER/REPO/"
@@ -128,6 +129,8 @@ export interface GhToolsDeps {
    * run. When absent, each tool gets a gate of its own.
    */
   readonly terminalGate?: TerminalGate;
+  /** Set when the repository's backport boards are configured; see backport-boards.ts. */
+  readonly backportBoards?: BackportBoards;
 }
 
 /** Repositories gh_api_read may read: the PR's and the upstream the release branches come from. */
@@ -148,13 +151,28 @@ function checkState(deps: GhToolsDeps, state: ReviewState): string | null {
  * also have reached GitHub even though the request reported an error.
  */
 async function writeState(deps: GhToolsDeps, state: ReviewState): Promise<{ url: string | null; error: string | null }> {
+  const boards = await addToBackportBoards(deps, state);
   try {
-    const { url } = await deps.stateWriter.write(renderReviewState(state, deps.ctx.headSha));
+    const { url } = await deps.stateWriter.write(renderReviewState(state, deps.ctx.headSha, undefined, boards));
     return { url, error: null };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.warn(`[review-state] write failed: ${msg}`);
     return { url: null, error: msg };
+  }
+}
+
+/**
+ * Adds the pull request to the boards of the release lines a "needed"
+ * backport names. Like the state write, a failure is only logged.
+ */
+async function addToBackportBoards(deps: GhToolsDeps, state: ReviewState): Promise<AddedBoard[]> {
+  if (!deps.backportBoards || state.backport.verdict !== 'needed') return [];
+  try {
+    return await deps.backportBoards.add(state.backport.branches);
+  } catch (err) {
+    console.warn(`[backport-boards] failed: ${err instanceof Error ? err.message : String(err)}`);
+    return [];
   }
 }
 

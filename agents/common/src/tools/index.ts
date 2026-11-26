@@ -2,6 +2,7 @@ import type { Octokit } from '@octokit/rest';
 import type { PrContext } from '../workspace.js';
 import type { StatusComment } from '../status-comment.js';
 import type { TokenSource } from '../github-auth.js';
+import type { BackportBoards } from '../backport-boards.js';
 import { createStateCommentWriter } from '../review-state.js';
 import { buildHarnessTools } from './harness.js';
 import { buildGitTool } from './git.js';
@@ -19,6 +20,8 @@ export interface CommonToolsOpts {
    * `onTerminal` from AssembleBaseOpts.
    */
   readonly onTerminal?: (tool: TerminalToolName, result: string) => void;
+  /** Pass through the `backportBoards` from AssembleBaseOpts. */
+  readonly backportBoards?: BackportBoards;
 }
 
 /**
@@ -42,6 +45,7 @@ export async function assembleCommonTools(opts: CommonToolsOpts): Promise<readon
     statusComment: opts.statusComment,
     stateWriter: createStateCommentWriter(opts.octokit, opts.ctx),
     terminalGate: createTerminalGate(opts.onTerminal),
+    backportBoards: opts.backportBoards,
   };
 
   return [

@@ -14,7 +14,7 @@ import { githubApi } from './github.js';
  * installation ids that are not the App's installation on the requested
  * repository, are refused. The checks are in src/broker.ts.
  *
- * Input:  { installation_id: number, repo: "owner/name" }
+ * Input:  { installation_id: number, repo: "owner/name", projects?: true }
  * Output: { token, expires_at } or { error }
  */
 
@@ -27,6 +27,7 @@ function required(name: string): string {
 const SECRET_ARN = required('GITHUB_SECRET_ARN');
 const APP_ID = required('GITHUB_APP_ID');
 const ALLOWED_REPOS = JSON.parse(required('ALLOWED_REPOS_JSON')) as string[];
+const PROJECT_REPOS = JSON.parse(process.env.PROJECT_REPOS_JSON || '[]') as string[];
 
 const sm = new SecretsManagerClient({});
 let cachedKey: { value: string; fetchedAt: number } | null = null;
@@ -49,6 +50,7 @@ const appAuth = async () => createAppAuth({ appId: APP_ID, privateKey: await pri
 
 export const handler = createTokenBroker({
   allowedRepos: ALLOWED_REPOS,
+  projectRepos: PROJECT_REPOS,
   appApi: async () => githubApi((await (await appAuth())({ type: 'app' })).token),
   issueToken: async (request) => (await appAuth())({ type: 'installation', ...request }),
 });

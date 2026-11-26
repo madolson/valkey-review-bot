@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { Octokit } from '@octokit/rest';
 import type { PrContext } from './workspace.js';
+import { renderAddedBoards, type AddedBoard } from './backport-boards.js';
 
 /**
  * Sticky review-state comment: one bot-owned top-level comment per PR,
@@ -101,7 +102,8 @@ function findingLine(f: ReviewState['findings'][number]): string {
   return `- ${minor}${where}${oneLine(f.summary)}`;
 }
 
-export function renderReviewState(state: ReviewState, headSha: string, now: Date = new Date()): string {
+/** `boardsAdded`: the backport boards this run added the pull request to. */
+export function renderReviewState(state: ReviewState, headSha: string, now: Date = new Date(), boardsAdded: readonly AddedBoard[] = []): string {
   const open = state.findings.filter((f) => !f.resolved);
   const resolved = state.findings.filter((f) => f.resolved);
   const lines: string[] = [STATE_MARKER, '### Review state', ''];
@@ -131,6 +133,8 @@ export function renderReviewState(state: ReviewState, headSha: string, now: Date
     ? `Needed${bp.branches.length > 0 ? ` for ${bp.branches.join(', ')}` : ''}.`
     : bp.verdict === 'not_needed' ? 'Not needed.' : 'Unclear.';
   lines.push(`**Backport:** ${bpHead} ${bp.reason.trim()}`, '');
+  const boards = renderAddedBoards(boardsAdded);
+  if (boards) lines.push(boards, '');
 
   if (state.direction.trim()) {
     lines.push('**Direction**', state.direction.trim(), '');
